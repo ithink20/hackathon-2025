@@ -274,8 +274,6 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log the agent response for debugging
-	log.Printf("ProfileSummaryAgent response for user %s: %+v", email, profileResponse)
 	if profileResponse.Data.Outputs != nil {
 		outputsJSON, _ := json.Marshal(profileResponse.Data.Outputs)
 		log.Printf("Agent outputs JSON: %s", string(outputsJSON))

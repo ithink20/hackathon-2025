@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"hackathon-2025/pkg/services"
 	"log"
 	"math/rand"
 	"net/http"
@@ -46,43 +47,82 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := database.GetDB()
-	if db == nil {
-		http.Error(w, "Database connection not available", http.StatusInternalServerError)
+	// Agent Filtering
+	apiKey := "9v7rMn7IzUgHT7kvbAqf1631tkD16w9P"
+	contentFilterAgent := services.ContentFilterAgent(apiKey)
+
+	requestJSON, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("Error marshaling request to JSON: %v", err)
+		http.Error(w, "Failed to process request", http.StatusInternalServerError)
 		return
 	}
 
-	// Generate unique post ID (you might want to use UUID in production)
-	rand.Seed(time.Now().UnixNano())
-	postID := fmt.Sprintf("%d", rand.Intn(900000)+100000)
-
-	userPost := models.UserPost{
-		PostID:      postID,
-		Title:       req.Title,
-		PostType:    req.Type,
-		Content:     req.Content,
-		AuthorName:  req.AuthorName,
-		AuthorImage: req.AuthorImage,
-		AuthorId:    req.AuthorID,
-		Timestamp:   time.Now().Unix(),
-		Metadata: models.PostMetadata{
-			Tags:     req.Tags,
-			Comments: req.Comments,
-		},
-		Likes: req.Likes,
-	}
-
-	if err := db.Create(&userPost).Error; err != nil {
-		log.Printf("Error creating post: %v", err)
-		http.Error(w, "Failed to create post", http.StatusInternalServerError)
+	contentFilterResp, err := contentFilterAgent.RunContentFilter(string(requestJSON))
+	if err != nil {
+		log.Printf("Error calling RunContentFilter: %v", err)
+		http.Error(w, "Failed to run content filtering", http.StatusInternalServerError)
 		return
 	}
 
-	response := models.PostResponse{
-		Post:      &userPost,
-		Message:   "Post created successfully",
-		Timestamp: time.Now(),
-		Status:    "success",
+	if contentFilterResp.Data.Outputs != nil {
+		outputsJSON, _ := json.Marshal(contentFilterResp.Data.Outputs)
+		log.Printf("RunContentFilter Agent outputs JSON: %s", string(outputsJSON))
+	}
+
+	var (
+		userPost models.UserPost
+		response models.PostResponse
+	)
+
+	processedData := processFilterResponse(contentFilterResp.Data.Outputs)
+	if !processedData.IsProblematic {
+		db := database.GetDB()
+		if db == nil {
+			http.Error(w, "Database connection not available", http.StatusInternalServerError)
+			return
+		}
+
+		// Generate unique post ID (you might want to use UUID in production)
+		rand.Seed(time.Now().UnixNano())
+		postID := fmt.Sprintf("%d", rand.Intn(900000)+100000)
+
+		userPost = models.UserPost{
+			PostID:      postID,
+			Title:       req.Title,
+			PostType:    req.Type,
+			Content:     req.Content,
+			AuthorName:  req.AuthorName,
+			AuthorImage: req.AuthorImage,
+			AuthorId:    req.AuthorID,
+			Timestamp:   time.Now().Unix(),
+			Metadata: models.PostMetadata{
+				Tags:     req.Tags,
+				Comments: req.Comments,
+			},
+			Likes: req.Likes,
+		}
+
+		if err := db.Create(&userPost).Error; err != nil {
+			log.Printf("Error creating post: %v", err)
+			http.Error(w, "Failed to create post", http.StatusInternalServerError)
+			return
+		}
+
+		response = models.PostResponse{
+			Post:      &userPost,
+			Message:   "Post created successfully",
+			Timestamp: time.Now(),
+			Status:    "success",
+		}
+	} else {
+		response = models.PostResponse{
+			Post:      &userPost,
+			Message:   "Blocked by AI Filter",
+			Timestamp: time.Now(),
+			Status:    "failed",
+			Error:     processedData.HelpText,
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -92,6 +132,24 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+func processFilterResponse(rawOutputs interface{}) models.FilterResponse {
+	outputsMap, ok := rawOutputs.(map[string]interface{})
+	if !ok {
+		log.Printf("Error: rawOutputs is not a map")
+		return models.FilterResponse{}
+	}
+
+	processed := models.FilterResponse{}
+	if hasIssue, ok := outputsMap["isProblematic"].(bool); ok {
+		processed.IsProblematic = hasIssue
+	}
+
+	if helpText, ok := outputsMap["helpText"].(string); ok {
+		processed.HelpText = helpText
+	}
+	return processed
 }
 
 func readPost(w http.ResponseWriter, r *http.Request) {
