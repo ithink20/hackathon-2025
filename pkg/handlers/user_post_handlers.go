@@ -212,41 +212,79 @@ func updatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db := database.GetDB()
-	if db == nil {
-		http.Error(w, "Database connection not available", http.StatusInternalServerError)
+	// Agent Filtering
+	apiKey := "9v7rMn7IzUgHT7kvbAqf1631tkD16w9P"
+	contentFilterAgent := services.ContentFilterAgent(apiKey)
+
+	requestJSON, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("Error marshaling request to JSON: %v", err)
+		http.Error(w, "Failed to process request", http.StatusInternalServerError)
 		return
 	}
 
-	var userPost models.UserPost
-	if err := db.Where("post_id = ? AND deleted_at IS NULL", postID).First(&userPost).Error; err != nil {
-		log.Printf("Error getting post %s: %v", postID, err)
-		http.Error(w, "Post not found", http.StatusNotFound)
+	contentFilterResp, err := contentFilterAgent.RunContentFilter(string(requestJSON))
+	if err != nil {
+		log.Printf("Error calling RunContentFilter: %v", err)
+		http.Error(w, "Failed to run content filtering", http.StatusInternalServerError)
 		return
 	}
 
-	// Update all fields with the provided values
-	userPost.Title = req.Title
-	userPost.Content = req.Content
-	userPost.AuthorName = req.AuthorName
-	userPost.AuthorImage = req.AuthorImage
-	userPost.Metadata.Tags = req.Tags
-	userPost.Metadata.Comments = req.Comments
-	userPost.Likes = req.Likes
-	userPost.PostType = req.Type
-	userPost.AuthorId = req.AuthorID
-
-	if err := db.Save(&userPost).Error; err != nil {
-		log.Printf("Error updating post %s: %v", postID, err)
-		http.Error(w, "Failed to update post", http.StatusInternalServerError)
-		return
+	if contentFilterResp.Data.Outputs != nil {
+		outputsJSON, _ := json.Marshal(contentFilterResp.Data.Outputs)
+		log.Printf("RunContentFilter Agent outputs JSON: %s", string(outputsJSON))
 	}
 
-	response := models.PostResponse{
-		Post:      &userPost,
-		Message:   "Post updated successfully",
-		Timestamp: time.Now(),
-		Status:    "success",
+	var (
+		userPost models.UserPost
+		response models.PostResponse
+	)
+
+	processedData := processFilterResponse(contentFilterResp.Data.Outputs)
+	if !processedData.IsProblematic {
+		db := database.GetDB()
+		if db == nil {
+			http.Error(w, "Database connection not available", http.StatusInternalServerError)
+			return
+		}
+
+		if err := db.Where("post_id = ? AND deleted_at IS NULL", postID).First(&userPost).Error; err != nil {
+			log.Printf("Error getting post %s: %v", postID, err)
+			http.Error(w, "Post not found", http.StatusNotFound)
+			return
+		}
+
+		// Update all fields with the provided values
+		userPost.Title = req.Title
+		userPost.Content = req.Content
+		userPost.AuthorName = req.AuthorName
+		userPost.AuthorImage = req.AuthorImage
+		userPost.Metadata.Tags = req.Tags
+		userPost.Metadata.Comments = req.Comments
+		userPost.Likes = req.Likes
+		userPost.PostType = req.Type
+		userPost.AuthorId = req.AuthorID
+
+		if err := db.Save(&userPost).Error; err != nil {
+			log.Printf("Error updating post %s: %v", postID, err)
+			http.Error(w, "Failed to update post", http.StatusInternalServerError)
+			return
+		}
+
+		response = models.PostResponse{
+			Post:      &userPost,
+			Message:   "Post updated successfully",
+			Timestamp: time.Now(),
+			Status:    "success",
+		}
+	} else {
+		response = models.PostResponse{
+			Post:      &userPost,
+			Message:   "Blocked by AI Filter",
+			Timestamp: time.Now(),
+			Status:    "failed",
+			Error:     processedData.HelpText,
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
