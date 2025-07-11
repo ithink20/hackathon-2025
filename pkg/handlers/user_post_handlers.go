@@ -115,7 +115,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		userPost = models.UserPost{
 			PostID:      postID,
 			Title:       req.Title,
-			PostType:    req.Type,
+			PostType:    processedData.ContentCategory,
 			Content:     processedData.EnglishContent,
 			AuthorName:  req.AuthorName,
 			AuthorImage: req.AuthorImage,
@@ -295,7 +295,7 @@ func updatePost(w http.ResponseWriter, r *http.Request) {
 		userPost.Metadata.Tags = req.Tags
 		userPost.Metadata.Comments = req.Comments
 		userPost.Likes = req.Likes
-		userPost.PostType = req.Type
+		userPost.PostType = processedData.ContentCategory
 		userPost.AuthorId = req.AuthorID
 
 		if err := db.Save(&userPost).Error; err != nil {
@@ -415,8 +415,8 @@ func listPosts(w http.ResponseWriter, r *http.Request) {
 	if searchKeyword != "" {
 		searchPattern := "%" + searchKeyword + "%"
 		query = query.Where(
-			"title ILIKE ? OR content ILIKE ? OR metadata::text ILIKE ?",
-			searchPattern, searchPattern, searchPattern,
+			"title ILIKE ? OR content ILIKE ? OR metadata::text ILIKE ? OR author_name ILIKE ?",
+			searchPattern, searchPattern, searchPattern, searchPattern,
 		)
 	}
 
