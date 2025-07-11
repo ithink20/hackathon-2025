@@ -63,7 +63,7 @@ func (cs *ConfluenceService) GetPagesByUser(email string) ([]models.PageInfo, er
 			req.Header.Set(key, value)
 		}
 
-		req.Header.Set("Cookie", "mywork.tab.tasks=false; confluence.list.pages.cookie=list-content-tree; confluence.last-web-item-clicked=system.space.tools%2Fcontenttools%2Fbrowse; mo.confluence-oauth.FORM_COOKIE=loginform; confluence-language=en_US; _gid=GA1.2.467484768.1752124827; space_auth_live=MTc1MjE1NTk4NnxOd3dBTkRkRlJFeExUVFkwUVRVMFRVZFVVMVl6U1VjMVdVbE5ObFEzVTFoUVdrNDJTbFUzVUZnMVdqUXlRa1ZMTjFJMFdUZFpSVkU9fJbZu3M5RkSBbatR9GVsapnSzcDxmcofYubL198JTdwh; JSESSIONID=25A05E649B6ECA7FD71A2B50D0F9BFE2; _gat_gtag_UA_156269607_2=1; _ga_VPBMX0QP83=GS2.1.s1752221241$o3$g1$t1752221415$j59$l0$h0; _ga=GA1.1.1600566590.1752124827")
+		req.Header.Set("Cookie", "mywork.tab.tasks=false; confluence.list.pages.cookie=list-content-tree; confluence.last-web-item-clicked=system.space.tools%2Fcontenttools%2Fbrowse; mo.confluence-oauth.FORM_COOKIE=loginform; confluence-language=en_US; _gid=GA1.2.467484768.1752124827; space_auth_live=MTc1MjE1NTk4NnxOd3dBTkRkRlJFeExUVFkwUVRVMFRVZFVVMVl6U1VjMVdVbE5ObFEzVTFoUVdrNDJTbFUzVUZnMVdqUXlRa1ZMTjFJMFdUZFpSVkU9fJbZu3M5RkSBbatR9GVsapnSzcDxmcofYubL198JTdwh; JSESSIONID=0CD0585B00B37625557A1482C2C4FDEC; _ga=GA1.1.1600566590.1752124827; _ga_VPBMX0QP83=GS2.1.s1752236872$o5$g1$t1752236884$j48$l0$h0")
 
 		client := &http.Client{}
 		resp, err := client.Do(req)

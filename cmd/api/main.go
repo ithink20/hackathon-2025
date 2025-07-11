@@ -37,6 +37,7 @@ func main() {
 	http.HandleFunc("/health", corsMiddleware(handlers.HealthHandler))
 	http.HandleFunc("/pages/user", corsMiddleware(handlers.GetPagesByUserHandler))
 	http.HandleFunc("/get_profile_summary", corsMiddleware(handlers.GetProfileSummaryHandler))
+	http.HandleFunc("/user/post", corsMiddleware(handlers.UserPostHandler))
 
 	fmt.Printf("Server starting on port %s\n", port)
 	fmt.Println("Available endpoints:")
@@ -45,6 +46,14 @@ func main() {
 	fmt.Println("  GET /health              - Health check")
 	fmt.Println("  GET /pages/user          - Get pages by user (requires email parameter)")
 	fmt.Println("  GET /get_profile_summary - Get profile summary (requires email parameter)")
+	fmt.Println("  POST/PUT/GET/DELETE /user/post - CRUD operations for user posts")
+	fmt.Println("")
+	fmt.Println("User Post API Usage:")
+	fmt.Println("  POST /user/post?op_type=create - Create a new post")
+	fmt.Println("  GET /user/post?op_type=read&post_id=<id> - Read a specific post")
+	fmt.Println("  PUT /user/post?op_type=update&post_id=<id> - Update a post")
+	fmt.Println("  DELETE /user/post?op_type=delete&post_id=<id> - Delete a post")
+	fmt.Println("  GET /user/post?op_type=list - List all posts (supports limit, offset, author_id)")
 	fmt.Println("")
 	fmt.Println("Press Ctrl+C to stop the server")
 

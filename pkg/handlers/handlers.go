@@ -126,6 +126,7 @@ func GetPagesByUserHandler(w http.ResponseWriter, r *http.Request) {
 			Type:    up.PageType,
 			Title:   up.PageTitle,
 			Content: up.PageContent,
+			Link:    up.PageLink,
 		})
 	}
 
@@ -152,45 +153,49 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sync := r.URL.Query().Get("sync") == "true"
+
 	db := database.GetDB()
 	if db == nil {
 		http.Error(w, "Database connection not available", http.StatusInternalServerError)
 		return
 	}
 
-	// Check if user profile already exists in database
-	var existingProfile models.UserProfile
-	err := db.Where("user_email = ? AND deleted_at IS NULL", email).First(&existingProfile).Error
+	if !sync {
+		// Check if user profile already exists in database
+		var existingProfile models.UserProfile
+		err := db.Where("user_email = ? AND deleted_at IS NULL", email).First(&existingProfile).Error
 
-	if err == nil {
-		// User profile exists, return from database
-		var outputs interface{}
-		if existingProfile.AISummary != "" {
-			if err := json.Unmarshal([]byte(existingProfile.AISummary), &outputs); err != nil {
-				log.Printf("Error unmarshaling stored AI summary for %s: %v", email, err)
-				// If unmarshaling fails, continue to generate new summary
-			} else {
-				// Successfully retrieved from database
-				response := ProfileSummaryResponse{
-					Data: struct {
-						Outputs interface{} `json:"outputs"`
-						Status  string      `json:"status"`
-					}{
-						Outputs: outputs,
-						Status:  "success",
-					},
-					Timestamp: time.Now(),
-					Error:     nil,
+		if err == nil {
+			// User profile exists, return from database
+			var outputs interface{}
+			if existingProfile.AISummary != "" {
+				if err := json.Unmarshal([]byte(existingProfile.AISummary), &outputs); err != nil {
+					log.Printf("Error unmarshaling stored AI summary for %s: %v", email, err)
+					// If unmarshaling fails, continue to generate new summary
+				} else {
+					// Successfully retrieved from database
+					response := ProfileSummaryResponse{
+						Data: struct {
+							Outputs interface{} `json:"outputs"`
+							Status  string      `json:"status"`
+						}{
+							Outputs: outputs,
+							Status:  "success",
+						},
+						Timestamp: time.Now(),
+						Error:     nil,
+					}
+
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusOK)
+
+					if err := json.NewEncoder(w).Encode(response); err != nil {
+						log.Printf("Error encoding response: %v", err)
+						http.Error(w, "Internal server error", http.StatusInternalServerError)
+					}
+					return
 				}
-
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-
-				if err := json.NewEncoder(w).Encode(response); err != nil {
-					log.Printf("Error encoding response: %v", err)
-					http.Error(w, "Internal server error", http.StatusInternalServerError)
-				}
-				return
 			}
 		}
 	}
@@ -198,7 +203,7 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	// If no existing profile or unmarshaling failed, generate new summary
 	// 1. Get documents from GetPagesByUserHandler
 	var userPages []models.UserPage
-	err = db.Where("user_email = ? AND deleted_at IS NULL", email).Find(&userPages).Error
+	err := db.Where("user_email = ? AND deleted_at IS NULL", email).Find(&userPages).Error
 	if err != nil {
 		log.Printf("Error getting pages for user %s: %v", email, err)
 		http.Error(w, "Failed to retrieve pages", http.StatusInternalServerError)
@@ -305,6 +310,7 @@ func syncUserPagesFromConfluence(db *gorm.DB, email string) ([]models.UserPage, 
 			PageType:    page.Type,
 			PageTitle:   page.Title,
 			PageContent: page.Content,
+			PageLink:    fmt.Sprintf("https://confluence.shopee.io/pages/viewpage.action?pageId=%s", page.ID),
 		}
 
 		result := db.Where("page_id = ?", page.ID).
