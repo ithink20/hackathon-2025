@@ -59,6 +59,23 @@ type ProfileSummaryResponse struct {
 	Error     interface{} `json:"error,omitempty"`
 }
 
+// UserProfileResponse represents the response structure for user profile operations
+type UserProfileResponse struct {
+	Data      models.UserProfile `json:"data"`
+	Message   string             `json:"message"`
+	Timestamp time.Time          `json:"timestamp"`
+	Status    string             `json:"status"`
+}
+
+// UserProfileListResponse represents the response structure for listing user profiles
+type UserProfileListResponse struct {
+	Data      []models.UserProfile `json:"data"`
+	Count     int                  `json:"count"`
+	Message   string               `json:"message"`
+	Timestamp time.Time            `json:"timestamp"`
+	Status    string               `json:"status"`
+}
+
 func HelloHandler(w http.ResponseWriter, r *http.Request) {
 	response := Response{
 		Message:   "Hello, World!",

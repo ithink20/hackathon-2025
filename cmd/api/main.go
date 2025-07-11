@@ -38,6 +38,13 @@ func main() {
 	http.HandleFunc("/pages/user", corsMiddleware(handlers.GetPagesByUserHandler))
 	http.HandleFunc("/get_profile_summary", corsMiddleware(handlers.GetProfileSummaryHandler))
 	http.HandleFunc("/user/post", corsMiddleware(handlers.UserPostHandler))
+	
+	// User Profile CRUD endpoints
+	http.HandleFunc("/user/profile", corsMiddleware(handlers.CreateUserProfileHandler))
+	http.HandleFunc("/user/profile/get", corsMiddleware(handlers.GetUserProfileHandler))
+	http.HandleFunc("/user/profile/update", corsMiddleware(handlers.UpdateUserProfileHandler))
+	http.HandleFunc("/user/profile/delete", corsMiddleware(handlers.DeleteUserProfileHandler))
+	http.HandleFunc("/user/profile/list", corsMiddleware(handlers.ListUserProfilesHandler))
 
 	fmt.Printf("Server starting on port %s\n", port)
 	fmt.Println("Available endpoints:")
@@ -47,6 +54,13 @@ func main() {
 	fmt.Println("  GET /pages/user          - Get pages by user (requires email parameter)")
 	fmt.Println("  GET /get_profile_summary - Get profile summary (requires email parameter)")
 	fmt.Println("  POST/PUT/GET/DELETE /user/post - CRUD operations for user posts")
+	fmt.Println("")
+	fmt.Println("User Profile API Usage:")
+	fmt.Println("  POST /user/profile       - Create a new user profile")
+	fmt.Println("  GET /user/profile/get?email=<email> - Get a specific user profile")
+	fmt.Println("  PUT /user/profile/update - Update a user profile")
+	fmt.Println("  DELETE /user/profile/delete?email=<email> - Delete a user profile")
+	fmt.Println("  GET /user/profile/list   - List all user profiles (supports limit, offset)")
 	fmt.Println("")
 	fmt.Println("User Post API Usage:")
 	fmt.Println("  POST /user/post?op_type=create - Create a new post")
