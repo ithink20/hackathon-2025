@@ -75,6 +75,7 @@ type CreatePostRequest struct {
 	Tags        []string  `json:"tags,omitempty"`
 	Comments    []Comment `json:"comments,omitempty"`
 	Likes       int       `json:"likes"`
+	CallAgent   bool      `json:"callAgent"`
 }
 
 // PostResponse represents the response for post operations
