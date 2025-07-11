@@ -292,7 +292,7 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		if profileResponse.Error == nil && profileResponse.Data.Outputs != nil {
 			// Convert outputs to JSON string for storage
-			outputsJSON, err := json.Marshal(profileResponse.Data.Outputs)
+			outputsJSON, err := json.Marshal(processedData)
 			if err != nil {
 				log.Printf("Error marshaling outputs to JSON: %v", err)
 				return
