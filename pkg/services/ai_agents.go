@@ -116,8 +116,8 @@ func (agent *AIAgent) RunProfileSummary(documents, template, userEmail string) (
 	workflowURL := fmt.Sprintf("%s/workflows/%s/run", agent.BaseURL, agent.WorkflowID)
 
 	// Truncate documents if too long (let's limit to 8000 characters to be safe)
-	if len(documents) > 8000 {
-		documents = documents[:8000] + "... [truncated]"
+	if len(documents) > 10000 {
+		documents = documents[:10000] + "... [truncated]"
 	}
 
 	payload := ProfileSummaryRequest{

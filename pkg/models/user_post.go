@@ -52,6 +52,7 @@ type UserPost struct {
 	Content     string         `json:"content" gorm:"not null"`
 	AuthorName  string         `json:"authorName" gorm:"column:author_name;not null"`
 	AuthorImage string         `json:"authorImg" gorm:"column:author_image"`
+	AuthorId    string         `json:"author_id" gorm:"column:author_id"`
 	Timestamp   int64          `json:"timestamp" gorm:"not null"`
 	Metadata    PostMetadata   `json:"metaData" gorm:"type:jsonb"`
 	Likes       int            `json:"likes" gorm:"default:0"`

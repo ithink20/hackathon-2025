@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"hackathon-2025/internal/database"
@@ -25,6 +27,27 @@ type PagesResponse struct {
 	Count     int               `json:"count"`
 	Timestamp time.Time         `json:"timestamp"`
 	Status    string            `json:"status"`
+}
+
+type Contribution struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Documents   []string `json:"documents"`
+}
+
+type ProcessedProfileSummary struct {
+	Role                string         `json:"role"`
+	Team                string         `json:"team"`
+	Tags                []string       `json:"tags"`
+	Summary             string         `json:"summary"`
+	RecentContributions []Contribution `json:"recentContributions"`
+}
+
+type ProcessedProfileSummaryResponse struct {
+	Data      ProcessedProfileSummary `json:"data"`
+	Timestamp time.Time               `json:"timestamp"`
+	Error     interface{}             `json:"error,omitempty"`
 }
 
 type ProfileSummaryResponse struct {
@@ -110,13 +133,20 @@ func GetPagesByUserHandler(w http.ResponseWriter, r *http.Request) {
 	if sync {
 		userPages, err = syncUserPagesFromConfluence(db, email)
 	} else {
-		err = db.Where("user_email = ? AND deleted_at IS NULL", email).Find(&userPages).Error
+		err = db.Where("user_email = ? AND deleted_at IS NULL", email).Order("page_id DESC").Find(&userPages).Error
 	}
 
 	if err != nil {
 		log.Printf("Error getting pages for user %s: %v", email, err)
 		http.Error(w, "Failed to retrieve pages", http.StatusInternalServerError)
 		return
+	}
+
+	// Sort userPages by page_id in descending order (for sync case)
+	if sync {
+		sort.Slice(userPages, func(i, j int) bool {
+			return userPages[i].PageID > userPages[j].PageID
+		})
 	}
 
 	var pages []models.PageInfo
@@ -203,7 +233,7 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 	// If no existing profile or unmarshaling failed, generate new summary
 	// 1. Get documents from GetPagesByUserHandler
 	var userPages []models.UserPage
-	err := db.Where("user_email = ? AND deleted_at IS NULL", email).Find(&userPages).Error
+	err := db.Where("user_email = ? AND deleted_at IS NULL", email).Order("page_id DESC").Find(&userPages).Error
 	if err != nil {
 		log.Printf("Error getting pages for user %s: %v", email, err)
 		http.Error(w, "Failed to retrieve pages", http.StatusInternalServerError)
@@ -218,40 +248,44 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		// Truncate individual page content if too long
 		content := up.PageContent
-		if len(content) > 1000 {
-			content = content[:1000] + "... [truncated]"
+		if len(content) > 90000 {
+			content = content[:90000] + "... [truncated]"
 		}
-		documents += fmt.Sprintf("Title: %s\nType: %s\nContent: %s", up.PageTitle, up.PageType, content)
+		documents += fmt.Sprintf("Title: %s\nType: %s\nContent: %s\n, PageLink: %s", up.PageTitle, up.PageType, content, up.PageLink)
 	}
 
-	// 2. Get template content by type
-	templateService := services.NewTemplateService()
-	template, err := templateService.GetTemplateContentByType("profile_summary")
-	if err != nil {
-		log.Printf("Error getting template for profile_summary: %v", err)
-		http.Error(w, "Failed to retrieve template", http.StatusInternalServerError)
-		return
-	}
+	//// 2. Get template content by type
+	//templateService := services.NewTemplateService()
+	//template, err := templateService.GetTemplateContentByType("profile_summary")
+	//if err != nil {
+	//	log.Printf("Error getting template for profile_summary: %v", err)
+	//	http.Error(w, "Failed to retrieve template", http.StatusInternalServerError)
+	//	return
+	//}
 
 	// 3. Call ProfileSummaryAgent with payload
 	apiKey := "W1fmYCsR1S6va1esyYSTwrFC14KELW4J"
 	profileSummaryAgent := services.ProfileSummaryAgent(apiKey)
 
-	profileResponse, err := profileSummaryAgent.RunProfileSummary(documents, template, email)
+	profileResponse, err := profileSummaryAgent.RunProfileSummary(documents, "", email)
 	if err != nil {
 		log.Printf("Error calling ProfileSummaryAgent: %v", err)
 		http.Error(w, "Failed to generate profile summary", http.StatusInternalServerError)
 		return
 	}
 
-	response := ProfileSummaryResponse{
-		Data: struct {
-			Outputs interface{} `json:"outputs"`
-			Status  string      `json:"status"`
-		}{
-			Outputs: profileResponse.Data.Outputs,
-			Status:  profileResponse.Data.Status,
-		},
+	// Log the agent response for debugging
+	log.Printf("ProfileSummaryAgent response for user %s: %+v", email, profileResponse)
+	if profileResponse.Data.Outputs != nil {
+		outputsJSON, _ := json.Marshal(profileResponse.Data.Outputs)
+		log.Printf("Agent outputs JSON: %s", string(outputsJSON))
+	}
+
+	// Process the response into the new format
+	processedData := processProfileResponse(profileResponse.Data.Outputs)
+
+	response := ProcessedProfileSummaryResponse{
+		Data:      processedData,
 		Timestamp: time.Now(),
 		Error:     profileResponse.Error,
 	}
@@ -291,6 +325,155 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+func parseRecentContributions(contributionsStr string) []Contribution {
+	var contributions []Contribution
+
+	// Split by "|" delimiter
+	parts := strings.Split(contributionsStr, "|")
+
+	// Process in groups of 2 (key, value)
+	var currentContribution Contribution
+	var contributionCount int
+
+	for i := 0; i < len(parts)-1; i += 2 {
+		if i+1 >= len(parts) {
+			break
+		}
+
+		key := strings.TrimSpace(parts[i])
+		value := strings.TrimSpace(parts[i+1])
+
+		// Skip if key or value is empty
+		if key == "" || value == "" {
+			continue
+		}
+
+		// Check if this is a new contribution (title1, title2, etc.)
+		if strings.HasPrefix(key, "title") {
+			// If we have a previous contribution, save it
+			if currentContribution.Title != "" {
+				contributions = append(contributions, currentContribution)
+			}
+
+			// Start new contribution
+			currentContribution = Contribution{
+				Title:       value,
+				Description: "",
+				Tags:        []string{},
+				Documents:   []string{},
+			}
+			contributionCount++
+		} else if strings.HasPrefix(key, "description") {
+			currentContribution.Description = value
+		} else if strings.HasPrefix(key, "tags") {
+			// Parse tags (assuming they're comma-separated)
+			if value != "" && value != "Unknown" {
+				tagParts := strings.Split(value, ",")
+				for _, tag := range tagParts {
+					trimmedTag := strings.TrimSpace(tag)
+					if trimmedTag != "" && trimmedTag != "Unknown" {
+						currentContribution.Tags = append(currentContribution.Tags, trimmedTag)
+					}
+				}
+			}
+
+			// If no valid tags, provide default
+			if len(currentContribution.Tags) == 0 {
+				currentContribution.Tags = []string{"No tags"}
+			}
+		} else if strings.HasPrefix(key, "documents") {
+			// Parse documents (assuming they're comma-separated or single value)
+			if value != "" && value != "Unknown" {
+				docParts := strings.Split(value, ",")
+				for _, doc := range docParts {
+					trimmedDoc := strings.TrimSpace(doc)
+					if trimmedDoc != "" && trimmedDoc != "Unknown" {
+						currentContribution.Documents = append(currentContribution.Documents, trimmedDoc)
+					}
+				}
+			}
+		}
+	}
+
+	// Append the last contribution if it exists
+	if currentContribution.Title != "" {
+		contributions = append(contributions, currentContribution)
+	}
+
+	return contributions
+}
+
+func processProfileResponse(rawOutputs interface{}) ProcessedProfileSummary {
+	// Convert raw outputs to map for easier processing
+	outputsMap, ok := rawOutputs.(map[string]interface{})
+	if !ok {
+		log.Printf("Error: rawOutputs is not a map")
+		return ProcessedProfileSummary{}
+	}
+
+	processed := ProcessedProfileSummary{}
+
+	// Extract basic fields with better validation
+	if role, ok := outputsMap["role"].(string); ok && role != "" && role != "Unknown" {
+		processed.Role = role
+	} else {
+		processed.Role = "Not Specified"
+	}
+
+	if team, ok := outputsMap["team"].(string); ok && team != "" {
+		processed.Team = team
+	} else {
+		processed.Team = "Not Specified"
+	}
+
+	if summary, ok := outputsMap["summary"].(string); ok && summary != "" {
+		processed.Summary = summary
+	} else {
+		processed.Summary = "No summary available"
+	}
+
+	// Parse tags with better validation
+	if tagsStr, ok := outputsMap["tags"].(string); ok && tagsStr != "" {
+		tagParts := strings.Split(tagsStr, ",")
+		for _, tag := range tagParts {
+			trimmedTag := strings.TrimSpace(tag)
+			if trimmedTag != "" && trimmedTag != "Unknown" {
+				processed.Tags = append(processed.Tags, trimmedTag)
+			}
+		}
+	}
+
+	// If no valid tags found, provide default
+	if len(processed.Tags) == 0 {
+		processed.Tags = []string{""}
+	}
+
+	// Parse recent contributions with better validation
+	if contributionsStr, ok := outputsMap["recentContributions"].(string); ok && contributionsStr != "" {
+		contributions := parseRecentContributions(contributionsStr)
+		// Only add contributions that have valid titles
+		for _, contribution := range contributions {
+			if contribution.Title != "" && contribution.Title != "Unknown" {
+				processed.RecentContributions = append(processed.RecentContributions, contribution)
+			}
+		}
+	}
+
+	// If no valid contributions found, provide a default message
+	if len(processed.RecentContributions) == 0 {
+		processed.RecentContributions = []Contribution{
+			{
+				Title:       "No Recent Contributions",
+				Description: "No recent contributions found for this user",
+				Tags:        []string{"No Data"},
+				Documents:   []string{},
+			},
+		}
+	}
+
+	return processed
 }
 
 func syncUserPagesFromConfluence(db *gorm.DB, email string) ([]models.UserPage, error) {

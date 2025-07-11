@@ -63,6 +63,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 		Content:     req.Content,
 		AuthorName:  req.AuthorName,
 		AuthorImage: req.AuthorImage,
+		AuthorId:    req.AuthorID,
 		Timestamp:   time.Now().Unix(),
 		Metadata: models.PostMetadata{
 			Tags:     req.Tags,
@@ -175,6 +176,7 @@ func updatePost(w http.ResponseWriter, r *http.Request) {
 	userPost.Metadata.Comments = req.Comments
 	userPost.Likes = req.Likes
 	userPost.PostType = req.Type
+	userPost.AuthorId = req.AuthorID
 
 	if err := db.Save(&userPost).Error; err != nil {
 		log.Printf("Error updating post %s: %v", postID, err)
@@ -260,6 +262,8 @@ func listPosts(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
 	searchKeyword := r.URL.Query().Get("search")
+	postType := r.URL.Query().Get("post_type")
+	authorId := r.URL.Query().Get("author_id")
 
 	limit := 10 // default limit
 	offset := 0 // default offset
@@ -285,6 +289,16 @@ func listPosts(w http.ResponseWriter, r *http.Request) {
 			"title ILIKE ? OR content ILIKE ? OR metadata::text ILIKE ?",
 			searchPattern, searchPattern, searchPattern,
 		)
+	}
+
+	// Add post_type filtering if provided
+	if postType != "" {
+		postTypePattern := "%" + postType + "%"
+		query = query.Where("post_type ILIKE ?", postTypePattern)
+	}
+
+	if authorId != "" {
+		query = query.Where("author_id = ?", authorId)
 	}
 
 	if err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&userPosts).Error; err != nil {
