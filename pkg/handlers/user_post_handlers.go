@@ -95,7 +95,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 				Timestamp:  time.Now().Unix(),
 				Likes:      0,
 			}
-			
+
 			// Append the new comment to existing comments
 			req.Comments = append(req.Comments, newComment)
 		}
@@ -116,7 +116,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 			PostID:      postID,
 			Title:       req.Title,
 			PostType:    req.Type,
-			Content:     req.Content,
+			Content:     processedData.EnglishContent,
 			AuthorName:  req.AuthorName,
 			AuthorImage: req.AuthorImage,
 			AuthorId:    req.AuthorID,
@@ -177,6 +177,10 @@ func processFilterResponse(rawOutputs interface{}) models.FilterResponse {
 
 	if category, ok := outputsMap["contentCategory"].(string); ok {
 		processed.ContentCategory = category
+	}
+
+	if englishContent, ok := outputsMap["englishContent"].(string); ok {
+		processed.EnglishContent = englishContent
 	}
 	return processed
 }
@@ -285,7 +289,7 @@ func updatePost(w http.ResponseWriter, r *http.Request) {
 
 		// Update all fields with the provided values
 		userPost.Title = req.Title
-		userPost.Content = req.Content
+		userPost.Content = processedData.EnglishContent
 		userPost.AuthorName = req.AuthorName
 		userPost.AuthorImage = req.AuthorImage
 		userPost.Metadata.Tags = req.Tags
