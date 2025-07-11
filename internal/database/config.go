@@ -5,7 +5,6 @@ import (
 	"os"
 )
 
-// Config holds database configuration
 type Config struct {
 	Host     string
 	Port     string
@@ -15,7 +14,6 @@ type Config struct {
 	SSLMode  string
 }
 
-// NewConfig creates a new database configuration
 func NewConfig() *Config {
 	return &Config{
 		Host:     getEnv("DB_HOST", "aws-0-ap-southeast-1.pooler.supabase.com"),
@@ -27,13 +25,11 @@ func NewConfig() *Config {
 	}
 }
 
-// GetDSN returns the database connection string
 func (c *Config) GetDSN() string {
 	return fmt.Sprintf("postgresql://%s:%s@%s:%s/%s?sslmode=%s",
 		c.User, c.Password, c.Host, c.Port, c.DBName, c.SSLMode)
 }
 
-// getEnv gets an environment variable or returns a default value
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

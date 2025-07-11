@@ -11,13 +11,11 @@ import (
 	"hackathon-2025/pkg/models"
 )
 
-// ConfluenceService handles interactions with Confluence API
 type ConfluenceService struct {
 	BaseURL string
 	Headers map[string]string
 }
 
-// NewConfluenceService creates a new Confluence service instance
 func NewConfluenceService() *ConfluenceService {
 	return &ConfluenceService{
 		BaseURL: "https://confluence.shopee.io",
@@ -39,85 +37,81 @@ func NewConfluenceService() *ConfluenceService {
 	}
 }
 
-// GetPagesByUser retrieves pages contributed by a specific user
 func (cs *ConfluenceService) GetPagesByUser(email string) ([]models.PageInfo, error) {
-	// Build the search URL
-	searchURL := fmt.Sprintf("%s/rest/api/search", cs.BaseURL)
+	var allPages []models.PageInfo
+	limit := 100
+	start := 0
 
-	// Create query parameters
-	params := url.Values{}
-	params.Set("cql", fmt.Sprintf(`contributor in ("%s") AND type in ("page")`, email))
-	params.Set("start", "0")
-	params.Set("limit", "20")
-	params.Set("excerpt", "highlight")
-	params.Set("expand", "space.icon")
-	params.Set("includeArchivedSpaces", "false")
-	params.Set("src", "next.ui.search")
+	for {
+		searchURL := fmt.Sprintf("%s/rest/api/search", cs.BaseURL)
 
-	// Create the request
-	req, err := http.NewRequest("GET", searchURL+"?"+params.Encode(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		params := url.Values{}
+		params.Set("cql", fmt.Sprintf(`contributor in ("%s") AND type in ("page")`, email))
+		params.Set("start", fmt.Sprintf("%d", start))
+		params.Set("limit", fmt.Sprintf("%d", limit))
+		params.Set("excerpt", "highlight")
+		params.Set("expand", "space.icon")
+		params.Set("includeArchivedSpaces", "false")
+		params.Set("src", "next.ui.search")
+
+		req, err := http.NewRequest("GET", searchURL+"?"+params.Encode(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		for key, value := range cs.Headers {
+			req.Header.Set(key, value)
+		}
+
+		req.Header.Set("Cookie", "mywork.tab.tasks=false; confluence.list.pages.cookie=list-content-tree; confluence.last-web-item-clicked=system.space.tools%2Fcontenttools%2Fbrowse; mo.confluence-oauth.FORM_COOKIE=loginform; confluence-language=en_US; _gid=GA1.2.467484768.1752124827; space_auth_live=MTc1MjE1NTk4NnxOd3dBTkRkRlJFeExUVFkwUVRVMFRVZFVVMVl6U1VjMVdVbE5ObFEzVTFoUVdrNDJTbFUzVUZnMVdqUXlRa1ZMTjFJMFdUZFpSVkU9fJbZu3M5RkSBbatR9GVsapnSzcDxmcofYubL198JTdwh; JSESSIONID=25A05E649B6ECA7FD71A2B50D0F9BFE2; _gat_gtag_UA_156269607_2=1; _ga_VPBMX0QP83=GS2.1.s1752221241$o3$g1$t1752221415$j59$l0$h0; _ga=GA1.1.1600566590.1752124827")
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to make request: %w", err)
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var confluenceResp models.ConfluenceSearchResponse
+		if err := json.Unmarshal(body, &confluenceResp); err != nil {
+			return nil, fmt.Errorf("failed to parse response: %w", err)
+		}
+
+		for _, result := range confluenceResp.Results {
+			allPages = append(allPages, models.PageInfo{
+				ID:    result.Content.ID,
+				Type:  result.Content.Type,
+				Title: result.Content.Title,
+			})
+		}
+
+		if start+len(confluenceResp.Results) >= confluenceResp.TotalSize {
+			break
+		}
+
+		start += limit
 	}
 
-	// Add headers
-	for key, value := range cs.Headers {
-		req.Header.Set(key, value)
-	}
-
-	// Add the cookie header (you might want to make this configurable)
-	req.Header.Set("Cookie", "mywork.tab.tasks=false; confluence.list.pages.cookie=list-content-tree; confluence.last-web-item-clicked=system.space.tools%2Fcontenttools%2Fbrowse; mo.confluence-oauth.FORM_COOKIE=loginform; confluence-language=en_US; _gid=GA1.2.467484768.1752124827; space_auth_live=MTc1MjE1NTk4NnxOd3dBTkRkRlJFeExUVFkwUVRVMFRVZFVVMVl6U1VjMVdVbE5ObFEzVTFoUVdrNDJTbFUzVUZnMVdqUXlRa1ZMTjFJMFdUZFpSVkU9fJbZu3M5RkSBbatR9GVsapnSzcDxmcofYubL198JTdwh; JSESSIONID=25A05E649B6ECA7FD71A2B50D0F9BFE2; _gat_gtag_UA_156269607_2=1; _ga_VPBMX0QP83=GS2.1.s1752221241$o3$g1$t1752221415$j59$l0$h0; _ga=GA1.1.1600566590.1752124827")
-
-	// Make the request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// Check if the request was successful
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse the response
-	var confluenceResp models.ConfluenceSearchResponse
-	if err := json.Unmarshal(body, &confluenceResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-
-	// Convert to simplified PageInfo format
-	var pages []models.PageInfo
-	for _, result := range confluenceResp.Results {
-		pages = append(pages, models.PageInfo{
-			ID:    result.Content.ID,
-			Type:  result.Content.Type,
-			Title: result.Content.Title,
-		})
-	}
-
-	return pages, nil
+	return allPages, nil
 }
 
-// GetPageContent retrieves the HTML content of a specific page
 func (cs *ConfluenceService) GetPageContent(pageID string) (string, error) {
-	// Build the content URL
 	contentURL := fmt.Sprintf("%s/plugins/viewstorage/viewpagestorage.action?pageId=%s", cs.BaseURL, pageID)
 
-	// Create the request
 	req, err := http.NewRequest("GET", contentURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Add headers for content request
 	req.Header.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
 	req.Header.Set("accept-language", "en-US,en;q=0.9")
 	req.Header.Set("cache-control", "max-age=0")
@@ -132,10 +126,8 @@ func (cs *ConfluenceService) GetPageContent(pageID string) (string, error) {
 	req.Header.Set("upgrade-insecure-requests", "1")
 	req.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36")
 
-	// Add the cookie header
 	req.Header.Set("Cookie", "mywork.tab.tasks=false; confluence.list.pages.cookie=list-content-tree; confluence.last-web-item-clicked=system.space.tools%2Fcontenttools%2Fbrowse; mo.confluence-oauth.FORM_COOKIE=loginform; confluence-language=en_US; _gid=GA1.2.467484768.1752124827; space_auth_live=MTc1MjE1NTk4NnxOd3dBTkRkRlJFeExUVFkwUVRVMFRVZFVVMVl6U1VjMVdVbE5ObFEzVTFoUVdrNDJTbFUzVUZnMVdqUXlRa1ZMTjFJMFdUZFpSVkU9fJbZu3M5RkSBbatR9GVsapnSzcDxmcofYubL198JTdwh; JSESSIONID=25A05E649B6ECA7FD71A2B50D0F9BFE2; _ga_VPBMX0QP83=GS2.1.s1752221241$o3$g1$t1752221612$j60$l0$h0; _ga=GA1.2.1600566590.1752124827; _gat_gtag_UA_156269607_2=1")
 
-	// Make the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -143,13 +135,11 @@ func (cs *ConfluenceService) GetPageContent(pageID string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Check if the request was successful
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
 	}
@@ -157,19 +147,15 @@ func (cs *ConfluenceService) GetPageContent(pageID string) (string, error) {
 	return string(body), nil
 }
 
-// GetPagesByUserWithContent retrieves pages by user and includes their HTML content
 func (cs *ConfluenceService) GetPagesByUserWithContent(email string) ([]models.PageInfo, error) {
-	// First get the pages
 	pages, err := cs.GetPagesByUser(email)
 	if err != nil {
 		return nil, err
 	}
 
-	// For each page, fetch its content
 	for i := range pages {
 		content, err := cs.GetPageContent(pages[i].ID)
 		if err != nil {
-			// Log the error but continue with other pages
 			log.Printf("Failed to fetch content for page %s: %v", pages[i].ID, err)
 			continue
 		}

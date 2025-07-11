@@ -4,7 +4,6 @@ import (
 	"log"
 )
 
-// Init initializes the database connection
 func Init() error {
 	config := NewConfig()
 
@@ -19,7 +18,6 @@ func Init() error {
 	return nil
 }
 
-// InitWithConfig initializes the database with a custom configuration
 func InitWithConfig(config *Config) error {
 	log.Println("Initializing database connection with custom config...")
 
