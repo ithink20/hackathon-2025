@@ -91,6 +91,7 @@ func (cs *ConfluenceService) GetPagesByUser(email string) ([]models.PageInfo, er
 				ID:    result.Content.ID,
 				Type:  result.Content.Type,
 				Title: result.Content.Title,
+				Link:  fmt.Sprintf("https://confluence.shopee.io/pages/viewpage.action?pageId=%s", result.Content.ID),
 			})
 		}
 

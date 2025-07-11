@@ -194,14 +194,8 @@ type SmartAgentResponse struct {
 	} `json:"data"`
 }
 
-func SmartAgentInvoke(inputStr string) (*SmartAgentResponse, error) {
+func SmartAgentInvoke(inputStr string, payload SmartAgentRequest) (*SmartAgentResponse, error) {
 	url := "https://smart.shopee.io/apis/smart/v1/orchestrator/deployments/invoke"
-
-	payload := SmartAgentRequest{
-		EndpointDeploymentHashID: "ouray20v2c6s8x7e7g0ediv5",
-		EndpointDeploymentKey:    "jik7hy2eh28jof0gly6rtw7r",
-		UserID:                   "ouray20v2c6s8x7e7g0ediv5",
-	}
 	payload.Message.InputStr = inputStr
 
 	jsonPayload, err := json.Marshal(payload)

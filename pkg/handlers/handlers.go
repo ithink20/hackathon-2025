@@ -221,15 +221,12 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 					log.Printf("Error unmarshaling stored AI summary for %s: %v", email, err)
 					// If unmarshaling fails, continue to generate new summary
 				} else {
+					// Process the stored data using the same parsing logic
+					processedData := processProfileResponse(outputs)
+
 					// Successfully retrieved from database
-					response := ProfileSummaryResponse{
-						Data: struct {
-							Outputs interface{} `json:"outputs"`
-							Status  string      `json:"status"`
-						}{
-							Outputs: outputs,
-							Status:  "success",
-						},
+					response := ProcessedProfileSummaryResponse{
+						Data:      processedData,
 						Timestamp: time.Now(),
 						Error:     nil,
 					}
@@ -257,81 +254,119 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert pages to documents string
-	var documents string
-	for i, up := range userPages {
-		if i > 0 {
-			documents += "\n\n"
-		}
-		// Truncate individual page content if too long
-		content := up.PageContent
-		if len(content) > 90000 {
-			content = content[:90000] + "... [truncated]"
-		}
-		documents += fmt.Sprintf("Title: %s\nType: %s\nContent: %s\n, PageLink: %s", up.PageTitle, up.PageType, content, up.PageLink)
+	var limitPages []models.UserPage
+
+	if len(userPages) == 0 {
+		userPages, err = syncUserPagesFromConfluence(db, email)
+
+		sort.Slice(userPages, func(i, j int) bool {
+			return userPages[i].PageID > userPages[j].PageID
+		})
 	}
 
-	//// 2. Get template content by type
-	//templateService := services.NewTemplateService()
-	//template, err := templateService.GetTemplateContentByType("profile_summary")
-	//if err != nil {
-	//	log.Printf("Error getting template for profile_summary: %v", err)
-	//	http.Error(w, "Failed to retrieve template", http.StatusInternalServerError)
-	//	return
-	//}
+	// Ensure we don't exceed array bounds
+	if len(userPages) > 5 {
+		limitPages = userPages[:5]
+	} else {
+		limitPages = userPages
+	}
 
-	// 3. Call ProfileSummaryAgent with payload
-	apiKey := "W1fmYCsR1S6va1esyYSTwrFC14KELW4J"
-	profileSummaryAgent := services.ProfileSummaryAgent(apiKey)
+	// Create comma-separated string of page links
+	var pageIds []string
+	for _, page := range limitPages {
+		if page.PageID != "" {
+			pageIds = append(pageIds, page.PageID)
+		}
+	}
+	pageIdsStr := strings.Join(pageIds, ",")
 
-	profileResponse, err := profileSummaryAgent.RunProfileSummary(documents, "", email)
-	if err != nil {
-		log.Printf("Error calling ProfileSummaryAgent: %v", err)
-		http.Error(w, "Failed to generate profile summary", http.StatusInternalServerError)
+	agentAns, agentErr := services.SmartAgentInvoke(pageIdsStr, services.SmartAgentRequest{
+		EndpointDeploymentHashID: "2i3rtmg8ssjttba1724ynqde",
+		EndpointDeploymentKey:    "yx4q46lnxo6kpyals96vm43c",
+		UserID:                   "2i3rtmg8ssjttba1724ynqde",
+	})
+
+	if agentErr != nil {
+		log.Printf("Error calling SmartAgentInvoke: %v, %v", agentErr, pageIdsStr)
+		http.Error(w, "Failed to get AI response", http.StatusInternalServerError)
 		return
 	}
 
-	if profileResponse.Data.Outputs != nil {
-		outputsJSON, _ := json.Marshal(profileResponse.Data.Outputs)
-		log.Printf("Agent outputs JSON: %s", string(outputsJSON))
+	log.Printf("data : %v", agentAns.Data.Response.ResponseStr)
+
+	// Clean the response string by removing markdown code block markers and trimming whitespace
+	cleanResponseStr := strings.TrimSpace(agentAns.Data.Response.ResponseStr)
+
+	// Remove markdown code block markers
+	cleanResponseStr = strings.TrimPrefix(cleanResponseStr, "```json")
+	cleanResponseStr = strings.TrimPrefix(cleanResponseStr, "```")
+	cleanResponseStr = strings.TrimSuffix(cleanResponseStr, "```")
+
+	// Remove any remaining quotes and whitespace
+	cleanResponseStr = strings.TrimSpace(cleanResponseStr)
+	cleanResponseStr = strings.Trim(cleanResponseStr, "\"'")
+
+	// Parse the AI response string into a map first
+	var responseData map[string]interface{}
+	if err := json.Unmarshal([]byte(cleanResponseStr), &responseData); err != nil {
+		log.Printf("Error unmarshaling AI response: %v", err)
+		log.Printf("Raw response: %s", agentAns.Data.Response.ResponseStr)
+		log.Printf("Cleaned response: %s", cleanResponseStr)
+		http.Error(w, "Failed to parse AI response", http.StatusInternalServerError)
+		return
 	}
 
-	// Process the response into the new format
-	processedData := processProfileResponse(profileResponse.Data.Outputs)
+	// Parse the AI response using the existing processProfileResponse function
+	processedData := processProfileResponse(responseData)
 
+	// Save the processed data to the UserProfile table
+	// First, check if user profile exists
+	var userProfile models.UserProfile
+	err = db.Where("user_email = ? AND deleted_at IS NULL", email).First(&userProfile).Error
+
+	if err != nil {
+		// User profile doesn't exist, create a new one
+		userProfile = models.UserProfile{
+			UserEmail:  email,
+			UserName:   email,                                                                                         // Default to email if no name provided
+			ProfileImg: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop&crop=face", // Default profile image
+		}
+	}
+
+	// Convert the processed data back to JSON string for storage
+	aiSummaryJSON, err := json.Marshal(responseData)
+	if err != nil {
+		log.Printf("Error marshaling AI summary for storage: %v", err)
+		http.Error(w, "Failed to process AI summary", http.StatusInternalServerError)
+		return
+	}
+
+	// Update the AISummary field
+	userProfile.AISummary = string(aiSummaryJSON)
+
+	// Save or update the user profile
+	if userProfile.ID == 0 {
+		// Create new profile
+		if err := db.Create(&userProfile).Error; err != nil {
+			log.Printf("Error creating user profile: %v", err)
+			http.Error(w, "Failed to save user profile", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Update existing profile
+		if err := db.Model(&userProfile).Update("ai_summary", userProfile.AISummary).Error; err != nil {
+			log.Printf("Error updating user profile: %v", err)
+			http.Error(w, "Failed to update user profile", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Create the proper response structure
 	response := ProcessedProfileSummaryResponse{
 		Data:      processedData,
 		Timestamp: time.Now(),
-		Error:     profileResponse.Error,
+		Error:     nil,
 	}
-
-	// Save AI summary to database asynchronously
-	go func() {
-		if profileResponse.Error == nil && profileResponse.Data.Outputs != nil {
-			// Convert outputs to JSON string for storage
-			outputsJSON, err := json.Marshal(processedData)
-			if err != nil {
-				log.Printf("Error marshaling outputs to JSON: %v", err)
-				return
-			}
-
-			userProfile := models.UserProfile{
-				UserEmail: email,
-				AISummary: string(outputsJSON),
-			}
-
-			// Upsert the user profile
-			result := db.Where("user_email = ? AND deleted_at IS NULL", email).
-				Assign(userProfile).
-				FirstOrCreate(&userProfile)
-
-			if result.Error != nil {
-				log.Printf("Error saving user profile for %s: %v", email, result.Error)
-			} else {
-				log.Printf("Successfully saved AI summary for user %s", email)
-			}
-		}
-	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -494,7 +529,7 @@ func processProfileResponse(rawOutputs interface{}) ProcessedProfileSummary {
 func syncUserPagesFromConfluence(db *gorm.DB, email string) ([]models.UserPage, error) {
 	confluenceService := services.NewConfluenceService()
 
-	pages, err := confluenceService.GetPagesByUserWithContent(email)
+	pages, err := confluenceService.GetPagesByUser(email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch from Confluence: %w", err)
 	}
@@ -508,7 +543,7 @@ func syncUserPagesFromConfluence(db *gorm.DB, email string) ([]models.UserPage, 
 			PageType:    page.Type,
 			PageTitle:   page.Title,
 			PageContent: page.Content,
-			PageLink:    fmt.Sprintf("https://confluence.shopee.io/pages/viewpage.action?pageId=%s", page.ID),
+			PageLink:    page.Link,
 		}
 
 		result := db.Where("page_id = ?", page.ID).

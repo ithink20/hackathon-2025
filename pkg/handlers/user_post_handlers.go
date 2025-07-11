@@ -78,7 +78,11 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	processedData := processFilterResponse(contentFilterResp.Data.Outputs)
 
 	if !processedData.IsProblematic && processedData.ContentCategory == models.CategoryQuestion {
-		agentAns, agentErr := services.SmartAgentInvoke(fmt.Sprintf(req.Title + " " + req.Content))
+		agentAns, agentErr := services.SmartAgentInvoke(fmt.Sprintf(req.Title+" "+req.Content), services.SmartAgentRequest{
+			EndpointDeploymentHashID: "ouray20v2c6s8x7e7g0ediv5",
+			EndpointDeploymentKey:    "jik7hy2eh28jof0gly6rtw7r",
+			UserID:                   "ouray20v2c6s8x7e7g0ediv5",
+		})
 		if agentErr != nil {
 			log.Printf("Error calling SmartAgentInvoke: %v", agentErr)
 			http.Error(w, "Failed to get AI response", http.StatusInternalServerError)
@@ -90,7 +94,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 			newComment := models.Comment{
 				ID:         fmt.Sprintf("comment_%d", time.Now().UnixNano()),
 				AuthorName: "Airis",
-				AuthorImg:  "https://unsplash.com/photos/yellow-and-black-robot-toy-81rOS-jYoJ8",
+				AuthorImg:  "https://images.unsplash.com/photo-1706466614967-f4f14a3d9d08?q=80&w=178&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
 				Content:    agentAns.Data.Response.ResponseStr,
 				Timestamp:  time.Now().Unix(),
 				Likes:      0,
@@ -289,7 +293,7 @@ func updatePost(w http.ResponseWriter, r *http.Request) {
 
 		// Update all fields with the provided values
 		userPost.Title = req.Title
-		userPost.Content = processedData.EnglishContent
+		userPost.Content = req.Content
 		userPost.AuthorName = req.AuthorName
 		userPost.AuthorImage = req.AuthorImage
 		userPost.Metadata.Tags = req.Tags
