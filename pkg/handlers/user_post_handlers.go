@@ -76,6 +76,31 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	)
 
 	processedData := processFilterResponse(contentFilterResp.Data.Outputs)
+
+	if !processedData.IsProblematic && processedData.ContentCategory == models.CategoryQuestion {
+		agentAns, agentErr := services.SmartAgentInvoke(fmt.Sprintf(req.Title + " " + req.Content))
+		if agentErr != nil {
+			log.Printf("Error calling SmartAgentInvoke: %v", agentErr)
+			http.Error(w, "Failed to get AI response", http.StatusInternalServerError)
+			return
+		}
+
+		if agentAns != nil {
+			// Construct new comment from the agent response
+			newComment := models.Comment{
+				ID:         fmt.Sprintf("comment_%d", time.Now().UnixNano()),
+				AuthorName: "Airis",
+				AuthorImg:  "https://unsplash.com/photos/yellow-and-black-robot-toy-81rOS-jYoJ8",
+				Content:    agentAns.Data.Response.ResponseStr,
+				Timestamp:  time.Now().Unix(),
+				Likes:      0,
+			}
+			
+			// Append the new comment to existing comments
+			req.Comments = append(req.Comments, newComment)
+		}
+	}
+
 	if !processedData.IsProblematic {
 		db := database.GetDB()
 		if db == nil {
@@ -148,6 +173,10 @@ func processFilterResponse(rawOutputs interface{}) models.FilterResponse {
 
 	if helpText, ok := outputsMap["helpText"].(string); ok {
 		processed.HelpText = helpText
+	}
+
+	if category, ok := outputsMap["contentCategory"].(string); ok {
+		processed.ContentCategory = category
 	}
 	return processed
 }

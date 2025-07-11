@@ -1,10 +1,18 @@
 package models
 
 type FilterResponse struct {
-	IsProblematic bool   `json:"isProblematic"`
-	HelpText      string `json:"helpText"`
+	IsProblematic   bool   `json:"isProblematic"`
+	HelpText        string `json:"helpText"`
+	ContentCategory string `json:"contentCategory"`
 }
 
 type FilterRequest struct {
 	UserContent string `json:"user_content"`
 }
+
+const (
+	CategoryQuestion     = "Question"
+	CategoryPost         = "Post"
+	CategoryOthers       = "Others"
+	CategoryAppreciation = "Appreciation"
+)

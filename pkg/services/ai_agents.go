@@ -172,6 +172,75 @@ func (agent *AIAgent) RunContentFilter(userContent string) (*AgentResponse, erro
 	return &filterResp, nil
 }
 
+type SmartAgentRequest struct {
+	EndpointDeploymentHashID string `json:"endpoint_deployment_hash_id"`
+	EndpointDeploymentKey    string `json:"endpoint_deployment_key"`
+	UserID                   string `json:"user_id"`
+	Message                  struct {
+		InputStr string `json:"input_str"`
+	} `json:"message"`
+}
+
+type SmartAgentResponse struct {
+	Status       string `json:"status"`
+	Error        string `json:"error"`
+	ErrorMessage string `json:"error_message"`
+	Code         int    `json:"code"`
+	Data         struct {
+		Response struct {
+			ResponseStr string `json:"response_str"`
+		} `json:"response"`
+		IsInterrupted bool `json:"is_interrupted"`
+	} `json:"data"`
+}
+
+func SmartAgentInvoke(inputStr string) (*SmartAgentResponse, error) {
+	url := "https://smart.shopee.io/apis/smart/v1/orchestrator/deployments/invoke"
+
+	payload := SmartAgentRequest{
+		EndpointDeploymentHashID: "ouray20v2c6s8x7e7g0ediv5",
+		EndpointDeploymentKey:    "jik7hy2eh28jof0gly6rtw7r",
+		UserID:                   "ouray20v2c6s8x7e7g0ediv5",
+	}
+	payload.Message.InputStr = inputStr
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request payload: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var smartResponse SmartAgentResponse
+	if err := json.Unmarshal(body, &smartResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Check if the response indicates an error
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return &smartResponse, nil
+}
+
 func ProfileSummaryAgent(apiKey string) *AIAgent {
 	return NewAIAgent("profileSummaryAgent", "1989", apiKey)
 }
