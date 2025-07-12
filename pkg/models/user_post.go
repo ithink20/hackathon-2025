@@ -11,12 +11,13 @@ import (
 
 // Comment represents a comment on a post
 type Comment struct {
-	ID         string `json:"id"`
-	AuthorName string `json:"authorName"`
-	AuthorImg  string `json:"authorImg"`
-	Content    string `json:"content"`
-	Timestamp  int64  `json:"timestamp"`
-	Likes      int    `json:"likes"`
+	ID          string `json:"id"`
+	AuthorName  string `json:"authorName"`
+	AuthorImg   string `json:"authorImg"`
+	AuthorEmail string `json:"authorEmail"`
+	Content     string `json:"content"`
+	Timestamp   int64  `json:"timestamp"`
+	Likes       int    `json:"likes"`
 }
 
 // PostMetadata contains tags and comments
@@ -52,6 +53,7 @@ type UserPost struct {
 	Content     string         `json:"content" gorm:"not null"`
 	AuthorName  string         `json:"authorName" gorm:"column:author_name;not null"`
 	AuthorImage string         `json:"authorImg" gorm:"column:author_image"`
+	AuthorEmail string         `json:"authorEmail" gorm:"column:author_email"`
 	AuthorId    string         `json:"author_id" gorm:"column:author_id"`
 	Timestamp   int64          `json:"timestamp" gorm:"not null"`
 	Metadata    PostMetadata   `json:"metaData" gorm:"type:jsonb"`
@@ -71,6 +73,7 @@ type CreatePostRequest struct {
 	Content     string    `json:"content" validate:"required"`
 	AuthorName  string    `json:"authorName" validate:"required"`
 	AuthorImage string    `json:"authorImg"`
+	AuthorEmail string    `json:"authorEmail"`
 	AuthorID    string    `json:"authorId" validate:"required"`
 	Tags        []string  `json:"tags,omitempty"`
 	Comments    []Comment `json:"comments,omitempty"`

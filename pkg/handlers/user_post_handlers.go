@@ -120,9 +120,10 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 			PostID:      postID,
 			Title:       req.Title,
 			PostType:    processedData.ContentCategory,
-			Content:     req.Content,
+			Content:     processedData.EnglishContent,
 			AuthorName:  req.AuthorName,
 			AuthorImage: req.AuthorImage,
+			AuthorEmail: req.AuthorEmail,
 			AuthorId:    req.AuthorID,
 			Timestamp:   time.Now().Unix(),
 			Metadata: models.PostMetadata{
@@ -301,6 +302,7 @@ func updatePost(w http.ResponseWriter, r *http.Request) {
 		userPost.Likes = req.Likes
 		userPost.PostType = processedData.ContentCategory
 		userPost.AuthorId = req.AuthorID
+		userPost.AuthorEmail = req.AuthorEmail
 
 		if err := db.Save(&userPost).Error; err != nil {
 			log.Printf("Error updating post %s: %v", postID, err)
