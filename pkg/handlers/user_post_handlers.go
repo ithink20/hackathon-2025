@@ -120,7 +120,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 			PostID:      postID,
 			Title:       req.Title,
 			PostType:    processedData.ContentCategory,
-			Content:     processedData.EnglishContent,
+			Content:     req.Content,
 			AuthorName:  req.AuthorName,
 			AuthorImage: req.AuthorImage,
 			AuthorEmail: req.AuthorEmail,
