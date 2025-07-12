@@ -3,12 +3,11 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"hackathon-2025/pkg/models"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
-
-	"hackathon-2025/pkg/models"
 )
 
 type ConfluenceService struct {
@@ -87,11 +86,14 @@ func (cs *ConfluenceService) GetPagesByUser(email string) ([]models.PageInfo, er
 		}
 
 		for _, result := range confluenceResp.Results {
+			timestamp := result.Timestamp / 1000
+
 			allPages = append(allPages, models.PageInfo{
-				ID:    result.Content.ID,
-				Type:  result.Content.Type,
-				Title: result.Content.Title,
-				Link:  fmt.Sprintf("https://confluence.shopee.io/pages/viewpage.action?pageId=%s", result.Content.ID),
+				ID:        result.Content.ID,
+				Type:      result.Content.Type,
+				Title:     result.Content.Title,
+				Link:      fmt.Sprintf("https://confluence.shopee.io/pages/viewpage.action?pageId=%s", result.Content.ID),
+				Timestamp: timestamp,
 			})
 		}
 

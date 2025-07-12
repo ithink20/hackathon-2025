@@ -399,6 +399,7 @@ func listPosts(w http.ResponseWriter, r *http.Request) {
 	searchKeyword := r.URL.Query().Get("search")
 	postType := r.URL.Query().Get("post_type")
 	authorId := r.URL.Query().Get("author_id")
+	authorEmail := r.URL.Query().Get("author_email")
 
 	limit := 10 // default limit
 	offset := 0 // default offset
@@ -434,6 +435,10 @@ func listPosts(w http.ResponseWriter, r *http.Request) {
 
 	if authorId != "" {
 		query = query.Where("author_id = ?", authorId)
+	}
+
+	if authorEmail != "" {
+		query = query.Where("author_email = ?", authorEmail)
 	}
 
 	if err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&userPosts).Error; err != nil {

@@ -159,13 +159,6 @@ func GetPagesByUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sort userPages by page_id in descending order (for sync case)
-	if sync {
-		sort.Slice(userPages, func(i, j int) bool {
-			return userPages[i].PageID > userPages[j].PageID
-		})
-	}
-
 	var pages []models.PageInfo
 	for _, up := range userPages {
 		pages = append(pages, models.PageInfo{
@@ -258,10 +251,6 @@ func GetProfileSummaryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(userPages) == 0 {
 		userPages, err = syncUserPagesFromConfluence(db, email)
-
-		sort.Slice(userPages, func(i, j int) bool {
-			return userPages[i].PageID > userPages[j].PageID
-		})
 	}
 
 	// Ensure we don't exceed array bounds
@@ -538,12 +527,13 @@ func syncUserPagesFromConfluence(db *gorm.DB, email string) ([]models.UserPage, 
 
 	for _, page := range pages {
 		userPage := models.UserPage{
-			UserEmail:   email,
-			PageID:      page.ID,
-			PageType:    page.Type,
-			PageTitle:   page.Title,
-			PageContent: page.Content,
-			PageLink:    page.Link,
+			UserEmail:     email,
+			PageID:        page.ID,
+			PageType:      page.Type,
+			PageTitle:     page.Title,
+			PageContent:   page.Content,
+			PageLink:      page.Link,
+			PageTimestamp: page.Timestamp,
 		}
 
 		result := db.Where("page_id = ?", page.ID).
@@ -557,6 +547,11 @@ func syncUserPagesFromConfluence(db *gorm.DB, email string) ([]models.UserPage, 
 
 		userPages = append(userPages, userPage)
 	}
+
+	// Sort pages by timestamp in descending order
+	sort.Slice(userPages, func(i, j int) bool {
+		return userPages[i].PageTimestamp > userPages[j].PageTimestamp
+	})
 
 	return userPages, nil
 }

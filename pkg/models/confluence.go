@@ -14,7 +14,8 @@ type ConfluenceSearchResponse struct {
 }
 
 type ConfluencePage struct {
-	Content ConfluenceContent `json:"content"`
+	Content   ConfluenceContent `json:"content"`
+	Timestamp int64             `json:"timestamp"`
 }
 
 type ConfluenceContent struct {
@@ -25,24 +26,26 @@ type ConfluenceContent struct {
 }
 
 type PageInfo struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Title   string `json:"title"`
-	Content string `json:"content,omitempty"`
-	Link    string `json:"link"`
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Title     string `json:"title"`
+	Content   string `json:"content,omitempty"`
+	Link      string `json:"link"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 type UserPage struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
-	UserEmail   string         `json:"user_email" gorm:"index;not null"`
-	PageID      string         `json:"page_id" gorm:"uniqueIndex;not null"`
-	PageType    string         `json:"page_type" gorm:"not null"`
-	PageTitle   string         `json:"page_title" gorm:"not null"`
-	PageContent string         `json:"page_content" gorm:"type:longtext"`
-	LastUpdated time.Time      `json:"last_updated" gorm:"autoUpdateTime"`
-	CreatedAt   time.Time      `json:"created_at" gorm:"autoCreateTime"`
-	DeletedAt   gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-	PageLink    string         `json:"page_link" gorm:"page_link"`
+	ID            uint           `json:"id" gorm:"primaryKey"`
+	UserEmail     string         `json:"user_email" gorm:"index;not null"`
+	PageID        string         `json:"page_id" gorm:"uniqueIndex;not null"`
+	PageType      string         `json:"page_type" gorm:"not null"`
+	PageTitle     string         `json:"page_title" gorm:"not null"`
+	PageContent   string         `json:"page_content" gorm:"type:longtext"`
+	LastUpdated   time.Time      `json:"last_updated" gorm:"autoUpdateTime"`
+	CreatedAt     time.Time      `json:"created_at" gorm:"autoCreateTime"`
+	DeletedAt     gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	PageLink      string         `json:"page_link" gorm:"page_link"`
+	PageTimestamp int64          `json:"page_timestamp"`
 }
 
 func (UserPage) TableName() string {
